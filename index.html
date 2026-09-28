@@ -48,7 +48,11 @@ th{position:sticky;top:0;background:var(--ink);color:#fff;text-align:left;paddin
 <section id="v-imp" hidden><div class="pnl"><h2>Import from Excel</h2><p>Choose an Excel file (.xls or .xlsx) in the same column layout. Only teachers not already in the database (same name and school) will be added.</p><input type="file" id="xf" accept=".xls,.xlsx" style="max-width:420px"><div id="ipv" style="margin-top:14px"></div></div></section>
 <section id="v-set" hidden><div class="pnl"><h2>Backup</h2><p class="note" style="margin-top:0">All data is saved inside this browser on this computer. Save a backup file now and then (keep it on a pen drive or in another folder).</p>
 <div class="bt"><button id="s-bk">Save backup file</button><button class="g" id="s-rs">Restore from backup file</button><input type="file" id="s-rf" accept=".json" hidden></div></div>
-<div class="pnl"><h2>Data</h2><div class="bt"><button class="g" id="s-xl">Export all to Excel</button><button class="g d" id="s-reset">Reset to original Excel data</button></div></div></section>
+<div class="pnl"><h2>JSON import / export</h2><p class="note" style="margin-top:0">Export gives a .json file of every record. Import can either add only the new teachers (same name and school are skipped) or replace everything with the file.</p>
+<div class="bt"><button id="j-exp">Export JSON</button><button class="g" id="j-mrg">Import JSON (add new only)</button><button class="g d" id="j-rep">Import JSON (replace all)</button><input type="file" id="j-file" accept=".json,application/json" hidden></div></div>
+<div class="pnl"><h2>Save data inside the HTML file</h2><p class="note" style="margin-top:0">Downloads a fresh copy of this page with all current records built in. Keep that copy as your master file: it opens with your data on any computer or browser, even without a backup file.</p>
+<div class="bt"><button id="j-html">Save updated HTML file</button></div></div>
+<div class="pnl"><h2>Data</h2><div class="bt"><button class="g" id="s-xl">Export all to Excel</button><button class="g d" id="s-reset">Reset to data saved in this file</button></div></div></section>
 </main></div>
 <div class="md" id="md"><div class="mc"><div id="mb"></div><div class="bt"><button id="m-print">Print A4</button><button class="g" id="m-edit">Edit</button><button class="g" id="m-close">Close</button></div></div></div>
 <div id="pa"></div><div id="toast"></div>
@@ -146,7 +150,7 @@ $('#d-print').onclick=()=>{const l=dlist();a4('lst',`<div class="oh"><h3>Office 
 /* excel */
 function xlsx(list,name){const S=slMap(),a=[H,...list.map(r=>{const d=der(r);return[S[r.school],r.school,r.name,r.desig,r.phone,fmt(r.dob),fmt(r.doj),fmt(d.y10),fmt(d.y18),fmt(d.y20),fmt(d.dor),remain(d.dor)]})],wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Data Input');XLSX.writeFile(wb,name)}
 $('#d-xl').onclick=()=>xlsx(dlist(),'Teachers_Taldangra_Circle.xlsx');$('#s-xl').onclick=()=>xlsx(rows,'Teachers_Taldangra_Circle_All.xlsx');
-$('#s-reset').onclick=()=>{if(confirm('Replace everything with the original Excel data? Your edits and additions will be lost.')){rows=SEED.map((r,i)=>({id:i+1,...r}));persist();render();toast('Original data restored.')}};
+$('#s-reset').onclick=()=>{if(confirm('Replace everything with the data this HTML file was saved with? Your later edits and additions will be lost.')){rows=SEED.map((r,i)=>({id:i+1,...r}));persist();render();toast('Original data restored.')}};
 const toIso=v=>{if(v==null||v==='')return'';if(typeof v==='number'){const o=XLSX.SSF.parse_date_code(v);return o?o.y+'-'+pad(o.m)+'-'+pad(o.d):''}const m=String(v).trim().match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);return m?m[3]+'-'+pad(m[2])+'-'+pad(m[1]):''};
 let pend=[];
 $('#xf').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const wb=XLSX.read(fr.result,{type:'array'}),a=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
@@ -161,5 +165,24 @@ $('#s-bk').onclick=()=>{const a=document.createElement('a');a.href=URL.createObj
 $('#s-rs').onclick=()=>$('#s-rf').click();
 $('#s-rf').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const d=JSON.parse(fr.result);if(!Array.isArray(d)||!d.every(r=>r&&typeof r.name==='string'&&typeof r.school==='string'))throw Error('This is not a valid backup file.');
 if(!confirm('Replace all data on this computer with the backup ('+d.length+' records)?'))return;let id=0;rows=d.map(r=>({...r,id:++id}));persist();render();clearForm();toast('Backup restored.')}catch(err){toast(err.message)}};fr.readAsText(f);e.target.value=''};
+
+/* JSON import / export + save data into HTML */
+const clean=r=>{const t=v=>String(v==null?'':v).trim(),d=v=>/^\d{4}-\d{2}-\d{2}$/.test(t(v))?t(v):'';return{school:t(r.school).toUpperCase(),name:t(r.name).toUpperCase(),desig:['HT','AT','PT'].includes(t(r.desig).toUpperCase())?t(r.desig).toUpperCase():'AT',phone:/^\d{10}$/.test(t(r.phone))?t(r.phone):'',dob:d(r.dob),doj:d(r.doj)}};
+function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+$('#j-exp').onclick=()=>{dl('Teachers_data_'+iso(new Date())+'.json',JSON.stringify({app:'SI Taldangra Circle - Primary Teacher Database',exported:iso(new Date()),count:rows.length,rows:rows.map(({id,...r})=>r)},null,1),'application/json');toast('JSON file saved in your Downloads folder.')};
+let jmode='merge';
+$('#j-mrg').onclick=()=>{jmode='merge';$('#j-file').click()};
+$('#j-rep').onclick=()=>{jmode='replace';$('#j-file').click()};
+$('#j-file').onchange=e=>{const f=e.target.files[0];if(!f)return;const fr=new FileReader();fr.onload=()=>{try{const j=JSON.parse(fr.result),d=Array.isArray(j)?j:(j&&Array.isArray(j.rows)?j.rows:null);if(!d)throw Error('This is not a valid JSON data file.');
+const list=d.filter(r=>r&&typeof r==='object'&&String(r.name||'').trim()&&String(r.school||'').trim()).map(clean),bad=d.length-list.length;if(!list.length)throw Error('No teacher records found in this file.');
+if(jmode==='replace'){if(!confirm('Replace all data on this computer with '+list.length+' records from the file?'))return;let id=0;rows=list.map(r=>({...r,id:++id}));persist();clearForm();render();toast(list.length+' records imported'+(bad?', '+bad+' skipped.':'.'));return}
+const have=new Set(rows.map(r=>norm(r.name)+'|'+norm(r.school)));let id=Math.max(0,...rows.map(x=>x.id)),add=0;list.forEach(r=>{const k=norm(r.name)+'|'+norm(r.school);if(have.has(k))return;have.add(k);r.id=++id;ins(r);add++});
+persist();render();toast(add+' new records added, '+(list.length-add)+' already present'+(bad?', '+bad+' skipped.':'.'))}catch(err){toast(err.message)}};fr.readAsText(f);e.target.value=''};
+$('#j-html').onclick=()=>{try{const c=document.documentElement.cloneNode(true);['t-entry','t-dash','strip','sls','res','mb','pa','ipv'].forEach(i=>{const x=c.querySelector('#'+i);if(x){x.innerHTML='';x.removeAttribute('style')}});
+c.querySelector('#pa').className='';c.querySelector('#md').classList.remove('on');const t=c.querySelector('#toast');t.textContent='';t.removeAttribute('style');
+['entry','dash','imp','set'].forEach(v=>{const x=c.querySelector('#v-'+v);v==='entry'?x.removeAttribute('hidden'):x.setAttribute('hidden','')});c.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v==='entry'));
+let h='<!DOCTYPE html>\n'+c.outerHTML;const a=h.indexOf('SEED=['),b=h.indexOf('}];\nconst K=',a);if(a<0||b<0)throw Error('Could not build the HTML file.');
+const data=JSON.stringify(rows.map(({id,...r})=>r)).replace(/</g,'\\u003c');h=h.slice(0,a)+'SEED='+data+h.slice(b+2);
+dl('index.html',h,'text/html');toast('HTML file saved with '+rows.length+' records inside.')}catch(err){toast(err.message)}};
 start();
 </script></body></html>
